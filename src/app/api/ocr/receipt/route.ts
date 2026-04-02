@@ -33,7 +33,11 @@ export async function POST(request: NextRequest) {
   // 이미지 → base64
   const buffer = await file.arrayBuffer()
   const base64 = Buffer.from(buffer).toString('base64')
-  const mimeType = (file.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/webp'
+
+  // Gemini 지원 형식으로 정규화
+  const rawType = file.type || 'image/jpeg'
+  const SUPPORTED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+  const mimeType = SUPPORTED.includes(rawType) ? rawType : 'image/jpeg'
 
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
@@ -43,14 +47,20 @@ export async function POST(request: NextRequest) {
     ])
 
     const text = result.response.text().trim()
+    console.log('[OCR] Gemini 응답:', text.slice(0, 200))
 
-    // JSON 파싱 (마크다운 코드블록 제거)
-    const jsonStr = text.replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim()
-    const parsed = JSON.parse(jsonStr)
-    const names: string[] = parsed.ingredients ?? []
+    // JSON 추출 (마크다운 코드블록 또는 일반 텍스트 처리)
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      console.error('[OCR] JSON 없음. 응답:', text)
+      return NextResponse.json({ error: '식재료를 인식하지 못했습니다' }, { status: 422 })
+    }
+
+    const parsed = JSON.parse(jsonMatch[0])
+    const names: string[] = (parsed.ingredients ?? []).filter((n: unknown) => typeof n === 'string' && n.trim())
 
     return NextResponse.json({
-      ingredients: names.map(text => ({ text, confidence: 1.0 })),
+      ingredients: names.map(name => ({ text: name.trim(), confidence: 1.0 })),
       raw_texts: names,
       image_size: [0, 0],
     })
