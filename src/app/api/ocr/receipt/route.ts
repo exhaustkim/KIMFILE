@@ -1,62 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const OCR_SERVER_URL = process.env.OCR_SERVER_URL ?? 'http://localhost:8000'
+const genAI = new GoogleGenerativeAI((process.env.GEMINI_API_KEY ?? '').trim())
 
-// POST /api/ocr/receipt
-// 스마트폰 카메라로 찍은 영수증 이미지 → 식재료 후보 반환
-// Content-Type: multipart/form-data (field name: "file")
+const PROMPT = `이 영수증 이미지를 분석해서 식재료(음식 재료)만 추출해줘.
+
+규칙:
+- 식재료(채소, 육류, 해산물, 유제품, 조미료, 과일, 곡류 등)만 포함
+- 비닐봉투, 영수증 번호, 매장명, 날짜, 가격, 합계, 할인, 포인트 등은 제외
+- 수량/단위(300g, 1개 등)는 제거하고 이름만 추출
+- 중복 제거
+
+반드시 아래 JSON 형식으로만 응답해. 다른 텍스트 없이 JSON만:
+{"ingredients": ["재료명1", "재료명2", ...]}`
+
 export async function POST(request: NextRequest) {
   const contentType = request.headers.get('content-type') ?? ''
   if (!contentType.includes('multipart/form-data')) {
-    return NextResponse.json(
-      { error: 'multipart/form-data 형식으로 전송해 주세요' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'multipart/form-data 형식으로 전송해 주세요' }, { status: 400 })
   }
 
-  // 이미지를 그대로 OCR 서버로 전달 (프록시)
   const formData = await request.formData()
   const file = formData.get('file')
 
   if (!file || !(file instanceof Blob)) {
     return NextResponse.json({ error: 'file 필드가 없습니다' }, { status: 400 })
   }
-
   if (file.size > 10 * 1024 * 1024) {
     return NextResponse.json({ error: '이미지는 10MB 이하여야 합니다' }, { status: 413 })
   }
 
-  // OCR 서버로 포워딩
-  const upstream = new FormData()
-  upstream.append('file', file)
+  // 이미지 → base64
+  const buffer = await file.arrayBuffer()
+  const base64 = Buffer.from(buffer).toString('base64')
 
-  let ocrRes: Response
+  // Gemini 지원 형식으로 정규화
+  const rawType = file.type || 'image/jpeg'
+  const SUPPORTED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+  const mimeType = SUPPORTED.includes(rawType) ? rawType : 'image/jpeg'
+
   try {
-    ocrRes = await fetch(`${OCR_SERVER_URL}/ocr/receipt`, {
-      method: 'POST',
-      body: upstream,
-      signal: AbortSignal.timeout(30_000),  // 30초 타임아웃
+    const keyPreview = (process.env.GEMINI_API_KEY ?? '').trim().slice(0, 8)
+    console.log('[OCR] GEMINI_API_KEY 앞 8자:', keyPreview, '길이:', (process.env.GEMINI_API_KEY ?? '').length)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const result = await model.generateContent([
+      PROMPT,
+      { inlineData: { data: base64, mimeType } },
+    ])
+
+    const text = result.response.text().trim()
+    console.log('[OCR] Gemini 응답:', text.slice(0, 200))
+
+    // JSON 추출 (마크다운 코드블록 또는 일반 텍스트 처리)
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      console.error('[OCR] JSON 없음. 응답:', text)
+      return NextResponse.json({ error: '식재료를 인식하지 못했습니다' }, { status: 422 })
+    }
+
+    const parsed = JSON.parse(jsonMatch[0])
+    const names: string[] = (parsed.ingredients ?? []).filter((n: unknown) => typeof n === 'string' && n.trim())
+
+    return NextResponse.json({
+      ingredients: names.map(name => ({ text: name.trim(), confidence: 1.0 })),
+      raw_texts: names,
+      image_size: [0, 0],
     })
   } catch (err) {
-    console.error('[OCR] 서버 연결 실패:', err)
-    return NextResponse.json(
-      { error: 'OCR 서버에 연결할 수 없습니다' },
-      { status: 502 }
-    )
+    console.error('[OCR] Gemini Vision 오류:', err)
+    return NextResponse.json({ error: '이미지 분석에 실패했습니다' }, { status: 500 })
   }
-
-  if (!ocrRes.ok) {
-    const detail = await ocrRes.json().catch(() => ({ detail: 'OCR 처리 실패' }))
-    return NextResponse.json({ error: detail.detail }, { status: ocrRes.status })
-  }
-
-  const result = await ocrRes.json()
-
-  // 응답 구조:
-  // {
-  //   raw_texts: string[],
-  //   ingredients: [{ text: string, confidence: number }],
-  //   image_size: [width, height]
-  // }
-  return NextResponse.json(result)
 }

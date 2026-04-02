@@ -86,7 +86,7 @@ export default function ReceiptPage() {
         }),
       })
       if (!res.ok) throw new Error('저장 실패')
-      router.push('/home')
+      router.push('/chat')
     } catch {
       setError('저장 중 오류가 발생했습니다')
     } finally {
