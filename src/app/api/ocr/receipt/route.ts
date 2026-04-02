@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+const genAI = new GoogleGenerativeAI((process.env.GEMINI_API_KEY ?? '').trim())
 
 const PROMPT = `이 영수증 이미지를 분석해서 식재료(음식 재료)만 추출해줘.
 
@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
   const mimeType = SUPPORTED.includes(rawType) ? rawType : 'image/jpeg'
 
   try {
+    const keyPreview = (process.env.GEMINI_API_KEY ?? '').trim().slice(0, 8)
+    console.log('[OCR] GEMINI_API_KEY 앞 8자:', keyPreview, '길이:', (process.env.GEMINI_API_KEY ?? '').length)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     const result = await model.generateContent([
       PROMPT,

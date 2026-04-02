@@ -4,7 +4,7 @@ import { CohereClient } from 'cohere-ai'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const cohere = new CohereClient({ token: process.env.COHERE_API_KEY! })
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+const genAI = new GoogleGenerativeAI((process.env.GEMINI_API_KEY ?? '').trim())
 
 type UserLevel = 'beginner' | 'intermediate' | 'advanced'
 type Role = 'user' | 'model'
