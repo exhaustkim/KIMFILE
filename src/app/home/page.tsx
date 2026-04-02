@@ -73,6 +73,18 @@ export default function HomePage() {
           </div>
         </button>
 
+        {/* 챗봇 */}
+        <button
+          onClick={() => router.push('/chat')}
+          className="w-full bg-white hover:bg-gray-50 active:bg-gray-100 border border-gray-200 text-gray-900 rounded-2xl p-6 flex items-center gap-4 transition-colors"
+        >
+          <span className="text-4xl">💬</span>
+          <div className="text-left">
+            <p className="font-semibold text-lg">레시피 추천받기</p>
+            <p className="text-sm text-gray-400 mt-0.5">재료로 오늘의 요리를 찾아드려요</p>
+          </div>
+        </button>
+
         {/* hidden inputs */}
         <input
           ref={cameraInputRef}
