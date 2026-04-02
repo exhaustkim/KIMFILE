@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   try {
     const keyPreview = (process.env.GEMINI_API_KEY ?? '').trim().slice(0, 8)
     console.log('[OCR] GEMINI_API_KEY 앞 8자:', keyPreview, '길이:', (process.env.GEMINI_API_KEY ?? '').length)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
     const result = await model.generateContent([
       PROMPT,
       { inlineData: { data: base64, mimeType } },

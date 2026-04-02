@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
 
   // 5. Gemini 호출
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash',
     systemInstruction: buildSystemPrompt(user_level, expiringNames),
   })
 
