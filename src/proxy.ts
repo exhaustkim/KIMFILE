@@ -9,7 +9,7 @@ const PUBLIC_PATHS = [
   '/api/recipes/semantic-search',
 ]
 
-export async function proxy(request: NextRequest) {
+async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p))
 
@@ -42,6 +42,8 @@ export async function proxy(request: NextRequest) {
 
   return response
 }
+
+export default proxy
 
 export const config = {
   matcher: ['/api/:path*'],
