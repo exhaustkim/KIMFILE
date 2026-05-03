@@ -3,16 +3,20 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI((process.env.GEMINI_API_KEY ?? '').trim())
 
-const PROMPT = `이 영수증 이미지를 분석해서 식재료(음식 재료)만 추출해줘.
+const PROMPT = `이 영수증 이미지를 분석해서 아래 두 가지를 추출해줘.
 
-규칙:
+## 1. 식재료 추출 규칙
 - 식재료(채소, 육류, 해산물, 유제품, 조미료, 과일, 곡류 등)만 포함
-- 비닐봉투, 영수증 번호, 매장명, 날짜, 가격, 합계, 할인, 포인트 등은 제외
+- 비닐봉투, 영수증 번호, 매장명, 가격, 합계, 할인, 포인트 등은 제외
 - 수량/단위(300g, 1개 등)는 제거하고 이름만 추출
 - 중복 제거
 
+## 2. 구매일 추출 규칙
+- 영수증에서 거래일자(구매일)를 찾아 YYYY-MM-DD 형식으로 변환
+- 날짜를 찾을 수 없으면 null
+
 반드시 아래 JSON 형식으로만 응답해. 다른 텍스트 없이 JSON만:
-{"ingredients": ["재료명1", "재료명2", ...]}`
+{"ingredients": ["재료명1", "재료명2", ...], "purchase_date": "YYYY-MM-DD 또는 null"}`
 
 export async function POST(request: NextRequest) {
   const contentType = request.headers.get('content-type') ?? ''
@@ -61,9 +65,18 @@ export async function POST(request: NextRequest) {
     const parsed = JSON.parse(jsonMatch[0])
     const names: string[] = (parsed.ingredients ?? []).filter((n: unknown) => typeof n === 'string' && n.trim())
 
+    // purchase_date 유효성 검증 (YYYY-MM-DD 형식인지 확인)
+    const rawDate = parsed.purchase_date ?? null
+    const purchaseDate = typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+      ? rawDate
+      : null
+
+    console.log('[OCR] 구매일:', purchaseDate)
+
     return NextResponse.json({
       ingredients: names.map(name => ({ text: name.trim(), confidence: 1.0 })),
       raw_texts: names,
+      purchase_date: purchaseDate,
       image_size: [0, 0],
     })
   } catch (err) {

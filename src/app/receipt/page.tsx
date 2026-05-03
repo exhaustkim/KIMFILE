@@ -14,6 +14,7 @@ interface Ingredient {
 export default function ReceiptPage() {
   const router = useRouter()
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
+  const [purchaseDate, setPurchaseDate] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -39,6 +40,10 @@ export default function ReceiptPage() {
       const today = new Date()
       today.setDate(today.getDate() + 7)
       const defaultExpiry = today.toISOString().split('T')[0]
+
+      // OCR에서 추출된 구매일 세팅 (없으면 오늘)
+      setPurchaseDate(data.purchase_date ?? new Date().toISOString().split('T')[0])
+
       setIngredients(
         (data.ingredients ?? []).map((i: { text: string; confidence: number }) => ({
           text: i.text,
@@ -78,6 +83,7 @@ export default function ReceiptPage() {
         body: JSON.stringify({
           items: selected.map(i => ({
             ingredient_name: i.text,
+            purchase_date: purchaseDate || null,
             expiry_date: i.expiry_date,
             storage_location: i.storage_location,
             added_by: 'ocr',
@@ -134,6 +140,21 @@ export default function ReceiptPage() {
 
         {!loading && ingredients.length > 0 && (
           <>
+            {/* 구매일 확인 */}
+            <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 mb-4 flex items-center gap-3">
+              <span className="text-xl">🗓️</span>
+              <div className="flex-1">
+                <p className="text-xs text-gray-400 mb-1">구매일</p>
+                <input
+                  type="date"
+                  value={purchaseDate}
+                  onChange={e => setPurchaseDate(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+              <p className="text-xs text-gray-400">영수증에서 자동 인식</p>
+            </div>
+
             <p className="text-sm text-gray-500 mb-4">
               인식된 식재료 {ingredients.length}개 · 체크 해제하면 저장에서 제외됩니다
             </p>

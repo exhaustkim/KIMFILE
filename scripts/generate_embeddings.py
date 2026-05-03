@@ -1,6 +1,7 @@
 """
 냉장고 탐정 - Cohere 임베딩 생성 및 Supabase 업로드
 모델: embed-multilingual-v3.0 (1024차원, 한국어 지원)
+대상 테이블: recipes_10000
 """
 
 import os
@@ -19,11 +20,16 @@ INSERT_BATCH   = 50   # Supabase INSERT 배치
 
 
 def make_embed_text(recipe: dict) -> str:
+    steps = recipe.get("steps") or []
+    step_text = " ".join(
+        s.get("description", "") for s in steps if isinstance(s, dict)
+    )
     parts = [
         recipe.get("name", ""),
         " ".join(recipe.get("ingredient_names") or []),
-        recipe.get("category", ""),
         recipe.get("cooking_method", ""),
+        recipe.get("cooking_level", ""),
+        step_text,
     ]
     return " ".join(p for p in parts if p).strip()
 
@@ -36,20 +42,20 @@ def main():
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     co = cohere.Client(COHERE_API_KEY)
 
-    # 1. 기존 임베딩 전체 삭제 (BGE-M3 → Cohere 교체)
+    # 1. 기존 임베딩 전체 삭제
     print("\n[1/4] 기존 임베딩 삭제 중...")
     supabase.table("recipe_embeddings").delete().neq("id", 0).execute()
     print("  → 삭제 완료")
 
-    # 2. 레시피 전체 로드
-    print("\n[2/4] Supabase에서 레시피 로딩...")
+    # 2. recipes_10000 전체 로드
+    print("\n[2/4] Supabase에서 레시피 로딩 (recipes_10000)...")
     recipes = []
     page_size = 1000
     offset = 0
     while True:
         batch = (
-            supabase.table("recipes")
-            .select("id, name, category, cooking_method, ingredient_names")
+            supabase.table("recipes_10000")
+            .select("id, name, cooking_method, cooking_level, ingredient_names, steps")
             .range(offset, offset + page_size - 1)
             .execute()
             .data
@@ -133,7 +139,9 @@ def main():
     ).execute().data
 
     for r in results:
-        print(f"  [{r['similarity']:.3f}] {r['name']} ({r['category']} / {r['cooking_method']})")
+        level     = r.get("cooking_level", "")
+        cook_time = r.get("cook_time_minutes", "")
+        print(f"  [{r['similarity']:.3f}] {r['name']} ({r['cooking_method']} / {level} / {cook_time}분)")
         print(f"          재료: {', '.join((r['ingredient_names'] or [])[:5])}")
 
 
