@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const query = searchParams.get('q')?.trim()
-  const level = searchParams.get('level')?.trim()   // 초보 | 중급 | 고급
+  const level = searchParams.get('level')?.trim()      // 초보 | 중급 | 고급
+  const category = searchParams.get('category')?.trim() // 식사 | 반찬 | 간식 | 음료
   const limit = Math.min(Number(searchParams.get('limit') ?? '12'), 50)
 
   if (!query) {
@@ -18,10 +19,11 @@ export async function GET(request: NextRequest) {
 
   let dbQuery = supabase
     .from('recipes_10000')
-    .select('id, name, cooking_method, cooking_level, cook_time_minutes, ingredient_names, steps, image_url')
+    .select('id, name, cooking_method, cooking_level, category, cook_time_minutes, ingredient_names, steps, image_url')
     .limit(limit)
 
   if (level) dbQuery = dbQuery.eq('cooking_level', level)
+  if (category) dbQuery = dbQuery.eq('category', category)
 
   // 재료명 키워드 검색 (GIN 인덱스 활용)
   if (query) {
